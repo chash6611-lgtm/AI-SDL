@@ -109,7 +109,36 @@ const QuizReviewModal: React.FC<{ result: QuizResult; onClose: () => void }> = (
                                             {q.question}
                                         </ReactMarkdown>
                                     </div>
+                                    {q.questionTranslation && (
+                                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                            {q.questionTranslation}
+                                        </div>
+                                    )}
                                 </div>
+                                
+                                {q.passage && (
+                                    <div className="mb-3 p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-600 text-xs text-slate-600 dark:text-slate-300 max-h-32 overflow-y-auto">
+                                        <p className="font-bold mb-1">지문/스크립트:</p>
+                                        <ReactMarkdown 
+                                            remarkPlugins={[remarkGfm, remarkMath]}
+                                            rehypePlugins={[[rehypeKatex, { output: 'html' }]]} 
+                                            components={markdownComponents}
+                                        >
+                                            {q.passage}
+                                        </ReactMarkdown>
+                                        {q.passageTranslation && (
+                                             <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                                                <ReactMarkdown 
+                                                    remarkPlugins={[remarkGfm, remarkMath]}
+                                                    rehypePlugins={[[rehypeKatex, { output: 'html' }]]} 
+                                                    components={markdownComponents}
+                                                >
+                                                    {q.passageTranslation}
+                                                </ReactMarkdown>
+                                             </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="space-y-2 text-sm">
                                     <div className="flex flex-col gap-1">
@@ -138,6 +167,7 @@ const QuizReviewModal: React.FC<{ result: QuizResult; onClose: () => void }> = (
                                                 >
                                                     {q.answer}
                                                 </ReactMarkdown>
+                                                {q.answerTranslation && <span className="text-xs text-slate-500 dark:text-slate-400 font-normal ml-2">({q.answerTranslation})</span>}
                                             </div>
                                             <div className="text-slate-600 dark:text-slate-400 text-xs leading-snug">
                                                 <ReactMarkdown 
@@ -147,6 +177,17 @@ const QuizReviewModal: React.FC<{ result: QuizResult; onClose: () => void }> = (
                                                 >
                                                     {q.explanation}
                                                 </ReactMarkdown>
+                                                 {q.explanationTranslation && (
+                                                    <div className="mt-1 pt-1 border-t border-slate-100 dark:border-slate-700">
+                                                        <ReactMarkdown 
+                                                            remarkPlugins={[remarkGfm, remarkMath]} 
+                                                            rehypePlugins={[[rehypeKatex, { output: 'html' }]]}
+                                                            components={markdownComponents}
+                                                        >
+                                                            {q.explanationTranslation}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

@@ -37,10 +37,16 @@ export interface EducationCurriculum {
 
 export interface QuizQuestion {
     question: string;
+    questionTranslation?: string;
+    passage?: string; // Text for listening script or reading passage
+    passageTranslation?: string;
     questionType: QuestionType;
     options?: string[]; // For multiple-choice and OX
+    optionsTranslation?: string[];
     answer: string;
+    answerTranslation?: string;
     explanation: string;
+    explanationTranslation?: string;
     imageBase64?: string;
 }
 

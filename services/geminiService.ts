@@ -230,12 +230,16 @@ export const generateQuestions = async (subjectName: string, standardDescription
             }).join('\n');
             
         const languageInstruction = subjectName === '영어'
-            ? '문제는 영어로, 괄호 안에 한글 번역 포함.'
-            : '문제는 한국어로 작성.';
+            ? '모든 텍스트(질문, 지문, 선택지, 정답, 해설)는 반드시 영어로만 작성하십시오. 각 항목에 대한 한국어 번역은 반드시 대응하는 `Translation` 필드(questionTranslation, passageTranslation, optionsTranslation, answerTranslation, explanationTranslation)에 작성해야 합니다.'
+            : '문제, 정답, 해설은 모두 한국어로 작성하십시오.';
 
         const explanationInstruction = subjectName === '영어'
-            ? '해설은 영어로 작성 후 괄호 안에 한글 번역 포함.'
+            ? '해설(explanation)은 영어로 작성하고, 그에 대한 한국어 번역은 explanationTranslation에 작성하십시오.'
             : '해설 포함.';
+            
+        const passageInstruction = subjectName === '영어'
+            ? '**중요**: 듣기(Listening)나 독해(Reading) 평가인 경우, 대화문(Script)이나 지문(Passage)을 반드시 `passage` 필드(영어)와 `passageTranslation` 필드(한국어)에 작성하고, `question` 필드에는 그 지문에 대한 질문만 작성하세요.'
+            : '국어 과목이나 지문이 필요한 경우 `passage` 필드에 지문을 작성하세요.';
 
         const prompt = `
             성취기준: "${standardDescription}"
@@ -247,6 +251,7 @@ export const generateQuestions = async (subjectName: string, standardDescription
             지침:
             - ${languageInstruction}
             - ${explanationInstruction}
+            - ${passageInstruction}
             - 문제의 난이도는 중학생이 풀 수 있는 수준으로 맞춰주세요.
             - 시각 자료가 문제 풀이에 결정적인 도움이 되는 경우에만 'imagePrompt'에 영어 프롬프트 작성 (없으면 빈 문자열).
             - ${MATH_RULE_PROMPT}
@@ -265,6 +270,12 @@ export const generateQuestions = async (subjectName: string, standardDescription
                         type: Type.OBJECT,
                         properties: {
                             question: { type: Type.STRING },
+                            questionTranslation: { type: Type.STRING, description: "Korean translation of the question (if subject is English)" },
+                            passage: { 
+                                type: Type.STRING,
+                                description: "The reading passage or listening script context. Required for reading/listening tasks."
+                            },
+                            passageTranslation: { type: Type.STRING, description: "Korean translation of the passage (if subject is English)" },
                             questionType: { 
                                 type: Type.STRING,
                                 description: "Must be exactly one of: 'multiple-choice', 'short-answer', 'ox'"
@@ -273,8 +284,15 @@ export const generateQuestions = async (subjectName: string, standardDescription
                                 type: Type.ARRAY,
                                 items: { type: Type.STRING },
                             },
+                            optionsTranslation: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                description: "Korean translations of the options (if subject is English)"
+                            },
                             answer: { type: Type.STRING },
+                            answerTranslation: { type: Type.STRING, description: "Korean translation of the answer (if subject is English)" },
                             explanation: { type: Type.STRING },
+                            explanationTranslation: { type: Type.STRING, description: "Korean translation of the explanation (if subject is English)" },
                             imagePrompt: { 
                                 type: Type.STRING,
                                 description: 'Concise English prompt for image generation. Empty if not needed.'
