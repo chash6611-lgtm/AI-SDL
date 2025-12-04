@@ -425,11 +425,11 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                         
                         <section>
                             <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">궁금한 점 질문하기</h2>
-                            <div className="max-h-20 overflow-y-auto space-y-2 mb-1 p-2 bg-slate-50 dark:bg-slate-900/50 rounded-md border border-slate-200 dark:border-slate-700">
+                            <div className="space-y-3 mb-2 p-3 sm:p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 transition-all duration-300">
                                 {conversation.map((msg, index) => (
                                     <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                        <div className={`prose prose-sm dark:prose-invert max-w-none p-2 rounded-lg ${msg.role === 'user' ? 'bg-neon-blue/10 dark:bg-neon-blue/20 text-slate-800 dark:text-slate-100' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600'}`}>
-                                             <div className="overflow-x-auto leading-snug">
+                                        <div className={`prose prose-sm dark:prose-invert max-w-none p-3 rounded-lg shadow-sm ${msg.role === 'user' ? 'bg-neon-blue/10 dark:bg-neon-blue/20 text-slate-800 dark:text-slate-100' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600'}`}>
+                                             <div className="overflow-x-auto leading-relaxed">
                                                 <ReactMarkdown 
                                                     remarkPlugins={[remarkGfm, remarkMath]} 
                                                     rehypePlugins={[[rehypeKatex, { output: 'html' }]]}
@@ -442,7 +442,7 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                                     </div>
                                 ))}
                                 {conversation.length === 0 && (
-                                    <p className="text-center text-black dark:text-slate-200 py-0 my-0 text-sm font-bold leading-tight">
+                                    <p className="text-center text-slate-500 dark:text-slate-400 py-4 text-sm font-medium">
                                         이해가 잘 안 되는 내용이 있나요?<br/>AI 선생님에게 자유롭게 물어보세요!
                                     </p>
                                 )}

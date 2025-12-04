@@ -60,6 +60,21 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
+const CustomAxisTick = ({ x, y, payload, dy = 16, dx = 0, textAnchor = "middle" }: any) => (
+    <g transform={`translate(${x},${y})`}>
+        <text 
+            x={0} 
+            y={0} 
+            dy={dy}
+            dx={dx}
+            textAnchor={textAnchor} 
+            className="fill-slate-600 dark:fill-slate-400 font-bold text-xs"
+        >
+            {payload.value}
+        </text>
+    </g>
+);
+
 const QuizReviewModal: React.FC<{ result: QuizResult; onClose: () => void }> = ({ result, onClose }) => {
     const markdownComponents = {
         table: (props: any) => <div className="overflow-x-auto mb-2"><table className="table-auto w-full border-collapse border border-slate-300 dark:border-slate-600" {...props} /></div>,
@@ -310,15 +325,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
                             <div className="h-64 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={subjectData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-700" />
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" className="dark:stroke-slate-600" />
                                         <XAxis 
                                             dataKey="name" 
-                                            tick={{ fontSize: 12, fill: '#64748b' }} 
+                                            tick={<CustomAxisTick dy={12} />}
                                             axisLine={false} 
                                             tickLine={false} 
                                         />
                                         <YAxis 
-                                            tick={{ fontSize: 12, fill: '#64748b' }} 
+                                            tick={<CustomAxisTick dx={-10} dy={4} textAnchor="end" />}
                                             axisLine={false} 
                                             tickLine={false} 
                                             domain={[0, 100]} 
@@ -349,23 +364,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
                                 <div className="h-64 w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart 
-                                            layout="vertical"
                                             data={unitData} 
-                                            margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                                            margin={{ top: 5, right: 5, left: -20, bottom: 0 }}
                                         >
-                                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-700" />
-                                            <XAxis type="number" domain={[0, 100]} hide />
-                                            <YAxis 
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" className="dark:stroke-slate-600" />
+                                            <XAxis 
                                                 dataKey="name" 
-                                                type="category" 
-                                                width={100} 
-                                                tick={{ fontSize: 11, fill: '#64748b' }} 
+                                                tick={<CustomAxisTick dy={12} />}
                                                 axisLine={false} 
-                                                tickLine={false}
+                                                tickLine={false} 
                                                 interval={0}
                                             />
+                                            <YAxis 
+                                                domain={[0, 100]} 
+                                                tick={<CustomAxisTick dx={-10} dy={4} textAnchor="end" />}
+                                                axisLine={false} 
+                                                tickLine={false}
+                                            />
                                             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
-                                            <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={20} fill="#2ECC71">
+                                            <Bar dataKey="score" radius={[4, 4, 0, 0]} barSize={40} fill="#2ECC71">
                                                 {unitData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.score >= 80 ? '#2ECC71' : entry.score >= 60 ? '#3498DB' : '#E74C3C'} />
                                                 ))}
@@ -386,15 +403,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={recentChartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-700" />
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" className="dark:stroke-slate-600" />
                                     <XAxis 
                                         dataKey="name" 
-                                        tick={{ fontSize: 12, fill: '#64748b' }} 
+                                        tick={<CustomAxisTick dy={12} />}
                                         axisLine={false} 
                                         tickLine={false} 
                                     />
                                     <YAxis 
-                                        tick={{ fontSize: 12, fill: '#64748b' }} 
+                                        tick={<CustomAxisTick dx={-10} dy={4} textAnchor="end" />}
                                         axisLine={false} 
                                         tickLine={false} 
                                         domain={[0, 100]} 
