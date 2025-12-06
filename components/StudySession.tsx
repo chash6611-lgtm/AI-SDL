@@ -59,10 +59,11 @@ interface StudySessionProps {
     onGoHome: () => void;
 }
 
-const defaultQuestionCounts = {
+const defaultQuestionCounts: { [key in QuestionType]: number } = {
     'multiple-choice': 3,
     'short-answer': 1,
     'ox': 1,
+    'creativity': 0, 
 };
 
 export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standard, onSessionEnd, onGoHome }) => {
@@ -280,6 +281,9 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
             }
 
             const generated = await generateQuestions(subjectName, standard.description, requests);
+            if (!generated || generated.length === 0) {
+                throw new Error("문제를 생성하지 못했습니다. 잠시 후 다시 시도해주세요.");
+            }
             setQuestions(generated);
         } catch (err) {
             setQuestionsError(err instanceof Error ? err.message : '문제를 생성하는 데 실패했습니다.');
@@ -477,24 +481,28 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
 
                         <section>
                              <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 mb-3">이해도 확인하기(문항수 선택 가능)</h2>
-                            <div className="grid grid-cols-3 gap-2 mb-3">
+                            <div className="grid grid-cols-4 gap-2 mb-3">
                                 <div>
-                                    <label htmlFor="mc-questions" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">객관식</label>
+                                    <label htmlFor="mc-questions" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5 text-center">객관식</label>
                                     <input type="number" id="mc-questions" value={questionCounts['multiple-choice']} onChange={e => handleQuestionCountChange('multiple-choice', e.target.value)} min="0" className="w-full p-1.5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-md text-sm text-center"/>
                                 </div>
                                 <div>
-                                    <label htmlFor="sa-questions" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">서술형</label>
+                                    <label htmlFor="sa-questions" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5 text-center">서술형</label>
                                     <input type="number" id="sa-questions" value={questionCounts['short-answer']} onChange={e => handleQuestionCountChange('short-answer', e.target.value)} min="0" className="w-full p-1.5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-md text-sm text-center"/>
                                 </div>
                                 <div>
-                                    <label htmlFor="ox-questions" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5">OX</label>
+                                    <label htmlFor="ox-questions" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5 text-center">OX</label>
                                     <input type="number" id="ox-questions" value={questionCounts['ox']} onChange={e => handleQuestionCountChange('ox', e.target.value)} min="0" className="w-full p-1.5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-md text-sm text-center"/>
+                                </div>
+                                <div>
+                                    <label htmlFor="cr-questions" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5 text-center">창의 서술형</label>
+                                    <input type="number" id="cr-questions" value={questionCounts['creativity']} onChange={e => handleQuestionCountChange('creativity', e.target.value)} min="0" className="w-full p-1.5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-md text-sm text-center"/>
                                 </div>
                             </div>
                             <div className="flex flex-col">
                                 <Button 
                                     onClick={handleGenerateQuiz} 
-                                    disabled={isGeneratingQuestions || (questionCounts['multiple-choice'] === 0 && questionCounts['short-answer'] === 0 && questionCounts['ox'] === 0)} 
+                                    disabled={isGeneratingQuestions || (questionCounts['multiple-choice'] === 0 && questionCounts['short-answer'] === 0 && questionCounts['ox'] === 0 && questionCounts['creativity'] === 0)} 
                                     className="w-full !py-3 text-base"
                                 >
                                     {isGeneratingQuestions ? <Spinner size="sm" /> : '연습 문제 풀기'}

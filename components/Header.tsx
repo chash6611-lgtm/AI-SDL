@@ -11,6 +11,8 @@ interface HeaderProps {
     canGoForward: boolean;
     theme: Theme;
     setTheme: (theme: Theme) => void;
+    onToggleCoolMode: () => void;
+    isCoolMode: boolean;
 }
 
 const AiSdlLogo: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -151,7 +153,7 @@ const ThemeIcon: React.FC<{ theme: Theme }> = ({ theme }) => {
 };
 
 
-export const Header: React.FC<HeaderProps> = ({ onGoHome, onShowDashboard, onBack, onForward, canGoBack, canGoForward, theme, setTheme }) => {
+export const Header: React.FC<HeaderProps> = ({ onGoHome, onShowDashboard, onBack, onForward, canGoBack, canGoForward, theme, setTheme, onToggleCoolMode, isCoolMode }) => {
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 
     const cycleTheme = () => {
@@ -165,14 +167,23 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome, onShowDashboard, onBac
             <header className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-sm sticky top-0 z-50 border-b border-slate-200/50 dark:border-slate-700/50 transition-colors duration-300">
                 <div className="container mx-auto px-3">
                     <div className="flex items-center justify-between h-12 sm:h-14">
-                        <div 
-                            className="flex items-center gap-1.5 cursor-pointer group overflow-hidden"
-                            onClick={onGoHome}
-                        >
-                            <AiSdlLogo className="h-[24px] w-[48px] sm:h-[32.4px] sm:w-[64.8px] text-yellow-gold group-hover:opacity-90 transition-opacity shrink-0" />
-                            <h1 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap tracking-tight sm:text-[18px]">
-                                AI 자기주도학습
-                            </h1>
+                        <div className="flex items-center gap-1.5">
+                            <button 
+                                onClick={onToggleCoolMode}
+                                className="group cursor-pointer hover:opacity-90 transition-transform active:scale-95 focus:outline-none"
+                                title="테마 분위기 변경"
+                                aria-label="테마 분위기 변경"
+                            >
+                                <AiSdlLogo className={`h-[24px] w-[48px] sm:h-[32.4px] sm:w-[64.8px] shrink-0 shadow-sm rounded ${isCoolMode ? 'text-cyan-500' : 'text-yellow-gold'}`} />
+                            </button>
+                            <div 
+                                className="cursor-pointer group overflow-hidden ml-1"
+                                onClick={onGoHome}
+                            >
+                                <h1 className="text-[13px] font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap tracking-tight sm:text-[18px] group-hover:text-neon-blue transition-colors">
+                                    AI 자기주도학습
+                                </h1>
+                            </div>
                         </div>
                         <nav className="flex items-center gap-1 sm:gap-[10.8px] ml-2 shrink-0">
                             <button

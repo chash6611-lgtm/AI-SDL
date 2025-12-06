@@ -1,5 +1,5 @@
 
-export type QuestionType = 'multiple-choice' | 'short-answer' | 'ox';
+export type QuestionType = 'multiple-choice' | 'short-answer' | 'ox' | 'creativity';
 
 export type View = 'selector' | 'study' | 'dashboard';
 
@@ -71,3 +71,10 @@ export interface ConversationMessage {
 }
 
 export type TTSVoice = 'Kore' | 'Puck' | 'Charon' | 'Fenrir' | 'Zephyr';
+
+export type Grade = 'A' | 'B' | 'C' | 'D' | 'E';
+
+export interface ShortAnswerEvaluation {
+    grade: Grade;
+    feedback: string;
+}

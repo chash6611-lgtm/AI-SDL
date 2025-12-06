@@ -12,6 +12,7 @@ interface CurriculumSelectorProps {
     onApiKeySubmit: (key: string) => void;
     apiStatus: AppStatus;
     apiError: string | null;
+    isCoolMode: boolean;
 }
 
 export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({ 
@@ -20,7 +21,8 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
     apiKey,
     onApiKeySubmit,
     apiStatus,
-    apiError
+    apiError,
+    isCoolMode
 }) => {
     const [selectedCurriculumName, setSelectedCurriculumName] = useState<string>(educationCurriculums[0].name);
     const [selectedGrade, setSelectedGrade] = useState<string>('');
@@ -128,7 +130,7 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
          <div className="max-w-3xl mx-auto text-center px-2 pb-24 md:pb-20">
             <div className="my-4 md:my-6">
                 <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-white leading-tight">
-                    <span className="text-blue-900 dark:text-blue-400">AI 쌤과 함께</span> <span className="text-[#FF3B30]">나의 실력 체크!</span>
+                    <span className="text-blue-900 dark:text-blue-400">AI 쌤과 함께</span> <span className={isCoolMode ? "text-[#B22222]" : "text-[#FF3B30]"}>나의 실력 체크!</span>
                 </h1>
                 <p className="mt-1 text-slate-600 dark:text-slate-300 text-[11px] sm:text-sm leading-snug break-keep tracking-tight" style={{ wordBreak: 'keep-all' }}>
                     교육과정 성취기준을 선택하면 AI가 개념 설명과 문제 풀이를 도와줍니다.
@@ -239,7 +241,7 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
                     <Button 
                         onClick={handleSubmit} 
                         disabled={!selectedStandardId || apiStatus !== 'key_valid'} 
-                        className="w-full !bg-yellow-gold !text-black hover:!brightness-95 focus:!ring-yellow-gold text-base font-bold py-3 shadow-lg md:shadow-none disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 dark:disabled:text-slate-500"
+                        className={`w-full text-base font-bold py-3 shadow-lg md:shadow-none disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 dark:disabled:text-slate-500 ${isCoolMode ? '!bg-cyan-400 !text-white hover:!brightness-95 focus:!ring-cyan-400' : '!bg-yellow-gold !text-black hover:!brightness-95 focus:!ring-yellow-gold'}`}
                     >
                         {apiStatus === 'key_valid' ? '학습 시작하기' : 'API 키를 확인해주세요'}
                     </Button>

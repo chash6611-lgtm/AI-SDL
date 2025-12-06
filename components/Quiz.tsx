@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { QuizQuestion } from '../types.ts';
+import type { QuizQuestion, Grade, ShortAnswerEvaluation } from '../types.ts';
 import { Card } from './common/Card.tsx';
 import { Button } from './common/Button.tsx';
 import { Spinner } from './common/Spinner.tsx';
-import { generateSpeech } from '../services/geminiService.ts';
+import { generateSpeech, evaluateShortAnswer } from '../services/geminiService.ts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -94,15 +94,23 @@ const TranslateIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 );
 
 export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
+    // Safety check: ensure questions exist and are not empty
+    const safeQuestions = questions || [];
+    const hasQuestions = safeQuestions.length > 0;
+
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [userAnswers, setUserAnswers] = useState<(string | null)[]>(Array(questions.length).fill(null));
+    const [userAnswers, setUserAnswers] = useState<(string | null)[]>(hasQuestions ? Array(safeQuestions.length).fill(null) : []);
     
     // Manage checked state for EACH question individually
-    const [checkedStates, setCheckedStates] = useState<boolean[]>(Array(questions.length).fill(false));
+    const [checkedStates, setCheckedStates] = useState<boolean[]>(hasQuestions ? Array(safeQuestions.length).fill(false) : []);
     
     const [showResults, setShowResults] = useState(false);
     const [tempShortAnswer, setTempShortAnswer] = useState('');
-    const [selfAssessedCorrectness, setSelfAssessedCorrectness] = useState<(boolean | null)[]>(Array(questions.length).fill(null));
+    
+    // New States for Short Answer Grading
+    const [shortAnswerGrades, setShortAnswerGrades] = useState<(Grade | null)[]>(hasQuestions ? Array(safeQuestions.length).fill(null) : []);
+    const [aiEvaluations, setAiEvaluations] = useState<(ShortAnswerEvaluation | null)[]>(hasQuestions ? Array(safeQuestions.length).fill(null) : []);
+    const [isAiGrading, setIsAiGrading] = useState(false);
 
     // Audio / Script / Translation State
     const [isSpeaking, setIsSpeaking] = useState(false);
@@ -124,15 +132,16 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     
     // Sync tempShortAnswer with saved user answer when navigating
     useEffect(() => {
+        if (!hasQuestions) return;
         const savedAnswer = userAnswers[currentQuestionIndex];
-        const currentQType = questions[currentQuestionIndex].questionType;
+        const currentQType = safeQuestions[currentQuestionIndex].questionType;
         
         if (currentQType !== 'multiple-choice' && currentQType !== 'ox') {
              setTempShortAnswer(savedAnswer || '');
         } else {
              setTempShortAnswer('');
         }
-    }, [currentQuestionIndex, userAnswers, checkedStates, questions]);
+    }, [currentQuestionIndex, userAnswers, checkedStates, safeQuestions, hasQuestions]);
 
     const stopAudio = useCallback(() => {
         if (audioSourceRef.current) {
@@ -157,6 +166,12 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     useEffect(() => {
         return () => stopAudio();
     }, [stopAudio]);
+    
+    if (!hasQuestions) {
+        return <div className="p-8 text-center text-red-500 bg-white dark:bg-slate-800 rounded-xl shadow">문제 데이터가 없습니다. 다시 시도해주세요.</div>;
+    }
+
+    const currentQuestion = safeQuestions[currentQuestionIndex];
 
     const handlePlayScript = async (text: string) => {
         if (isSpeaking || isLoadingTTS) {
@@ -199,7 +214,6 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     };
 
 
-    const currentQuestion = questions[currentQuestionIndex];
     const userAnswer = userAnswers[currentQuestionIndex];
     const isAnswerChecked = checkedStates[currentQuestionIndex];
 
@@ -232,10 +246,30 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
         setShowScript(true); // Auto show script on check answer for review
     };
 
-    const handleSelfAssessment = (isCorrect: boolean) => {
-        const newAssessment = [...selfAssessedCorrectness];
-        newAssessment[currentQuestionIndex] = isCorrect;
-        setSelfAssessedCorrectness(newAssessment);
+    // AI Grading Handler
+    const handleAiGrading = async () => {
+        setIsAiGrading(true);
+        try {
+            const result = await evaluateShortAnswer(
+                currentQuestion.question,
+                currentQuestion.answer,
+                userAnswers[currentQuestionIndex] || ''
+            );
+            const newAiEvaluations = [...aiEvaluations];
+            newAiEvaluations[currentQuestionIndex] = result;
+            setAiEvaluations(newAiEvaluations);
+        } catch (error) {
+            alert('AI 채점 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        } finally {
+            setIsAiGrading(false);
+        }
+    };
+
+    // Manual Grading Handler
+    const handleGradeSelection = (grade: Grade) => {
+        const newGrades = [...shortAnswerGrades];
+        newGrades[currentQuestionIndex] = grade;
+        setShortAnswerGrades(newGrades);
     };
     
     const handlePrev = () => {
@@ -245,31 +279,49 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     };
 
     const handleNext = () => {
-        if (currentQuestionIndex < questions.length - 1) {
+        if (currentQuestionIndex < safeQuestions.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
         } else {
             // Calculate final results
-            const calculatedCorrectness = questions.map((question, index) => {
+            let totalEarnedPoints = 0;
+            const calculatedCorrectness = safeQuestions.map((question, index) => {
                  const type = question.questionType;
                  const isMcOrOx = type === 'multiple-choice' || type === 'ox';
                  const ans = userAnswers[index];
                  
                  if (!isMcOrOx) {
-                     return selfAssessedCorrectness[index] === true;
+                     const grade = shortAnswerGrades[index];
+                     if (grade === 'A') {
+                         totalEarnedPoints += 1;
+                         return true;
+                     } else if (grade === 'B') {
+                         totalEarnedPoints += 0.75;
+                         return true; // 75%
+                     } else if (grade === 'C') {
+                         totalEarnedPoints += 0.5;
+                         return true; // 50%
+                     } else if (grade === 'D') {
+                         totalEarnedPoints += 0.25;
+                         return false; // 25% considered incorrect for binary stat
+                     } else {
+                         return false;
+                     }
                  } else {
-                     return isAnswerMatch(ans, question.answer);
+                     const isCorrect = isAnswerMatch(ans, question.answer);
+                     if (isCorrect) totalEarnedPoints += 1;
+                     return isCorrect;
                  }
             });
 
+            const scorePercentage = (totalEarnedPoints / safeQuestions.length) * 100;
             const correctCount = calculatedCorrectness.filter(c => c === true).length;
-            const scorePercentage = (correctCount / questions.length) * 100;
             
             setShowResults(true);
-            onSubmit(scorePercentage, correctCount, questions.length, userAnswers, calculatedCorrectness);
+            onSubmit(scorePercentage, correctCount, safeQuestions.length, userAnswers, calculatedCorrectness);
         }
     };
 
-    const isLastQuestion = currentQuestionIndex === questions.length - 1;
+    const isLastQuestion = currentQuestionIndex === safeQuestions.length - 1;
 
     const getOptionClasses = (option: string) => {
         let baseClasses = 'w-full text-left p-3 border rounded-lg transition-all duration-200 select-none text-sm leading-snug';
@@ -369,7 +421,7 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
             );
         }
 
-        // Default to short-answer
+        // Short-answer UI (for both 'short-answer' and 'creativity')
         return (
             <div className="mt-4">
                 <input
@@ -378,12 +430,14 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
                     onChange={handleShortAnswerChange}
                     disabled={isAnswerChecked}
                     className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg focus:ring-2 focus:ring-neon-blue text-base text-slate-800 dark:text-slate-100"
-                    placeholder="정답을 입력하세요..."
+                    placeholder={type === 'creativity' ? "창의적인 답변을 자유롭게 작성해보세요..." : "정답을 입력하세요..."}
                     autoComplete="off"
                 />
                 {isAnswerChecked && (
                     <div className="mt-4 p-3 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-600">
-                        <p className="font-semibold text-slate-800 dark:text-slate-200 mb-1.5 text-sm">AI가 제시한 정답:</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 mb-1.5 text-sm">
+                            {type === 'creativity' ? 'AI가 제시한 모범 답안 예시:' : 'AI가 제시한 정답:'}
+                        </p>
                         <div className="text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-600 text-sm">
                             <ReactMarkdown 
                                 remarkPlugins={[remarkGfm, remarkMath]}
@@ -400,19 +454,96 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
                             </div>
                         )}
                         
-                        {selfAssessedCorrectness[currentQuestionIndex] === null ? (
-                            <div className="mt-4">
-                                <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">제시된 정답과 자신의 답안을 비교하여 직접 채점해주세요.</p>
-                                <div className="flex gap-2">
-                                    <Button variant="secondary" onClick={() => handleSelfAssessment(true)} className="flex-1 !bg-lime-green/20 !text-lime-green hover:!bg-lime-green/30 focus:!ring-lime-green !py-2 text-sm">정답입니다</Button>
-                                    <Button variant="secondary" onClick={() => handleSelfAssessment(false)} className="flex-1 !bg-red-100 dark:!bg-red-900/30 !text-red-800 dark:!text-red-300 hover:!bg-red-200 dark:hover:!bg-red-900/50 focus:!ring-red-300 !py-2 text-sm">틀립니다</Button>
-                                </div>
+                        <div className="mt-4 border-t border-slate-200 dark:border-slate-600 pt-4">
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">채점하기</p>
+                            
+                            {/* AI Grading Section */}
+                            <div className="mb-4">
+                                {!aiEvaluations[currentQuestionIndex] ? (
+                                    <Button 
+                                        variant="secondary" 
+                                        onClick={handleAiGrading} 
+                                        disabled={isAiGrading}
+                                        className="text-xs !py-1.5 !px-3"
+                                    >
+                                        {isAiGrading ? <Spinner size="sm" /> : '🤖 AI 채점 결과 보기'}
+                                    </Button>
+                                ) : (
+                                    <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-600 text-sm">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-bold text-neon-blue">AI 점수:</span>
+                                            <span className={`font-bold px-2 py-0.5 rounded text-xs ${
+                                                aiEvaluations[currentQuestionIndex]!.grade === 'A' ? 'bg-green-100 text-green-700' :
+                                                aiEvaluations[currentQuestionIndex]!.grade === 'B' ? 'bg-blue-100 text-blue-700' :
+                                                aiEvaluations[currentQuestionIndex]!.grade === 'C' ? 'bg-yellow-100 text-yellow-700' :
+                                                aiEvaluations[currentQuestionIndex]!.grade === 'D' ? 'bg-orange-100 text-orange-700' :
+                                                'bg-red-100 text-red-700'
+                                            }`}>
+                                                {aiEvaluations[currentQuestionIndex]!.grade}
+                                            </span>
+                                        </div>
+                                        <p className="text-slate-600 dark:text-slate-300 text-xs leading-snug">
+                                            {aiEvaluations[currentQuestionIndex]!.feedback}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
-                        ) : (
-                            <p className="mt-3 text-xs font-semibold text-center p-1.5 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200">
-                                {selfAssessedCorrectness[currentQuestionIndex] ? '정답으로 채점함' : '오답으로 채점함'}
-                            </p>
-                        )}
+
+                            {/* User Self Grading Section */}
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">AI 평가를 참고하여 최종 점수를 선택해주세요.</p>
+                            <div className="grid grid-cols-5 gap-1">
+                                <button 
+                                    onClick={() => handleGradeSelection('A')}
+                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                        shortAnswerGrades[currentQuestionIndex] === 'A' 
+                                        ? 'bg-green-100 border-green-500 text-green-700 ring-1 ring-green-500 dark:bg-green-900/30 dark:text-green-300' 
+                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                    }`}
+                                >
+                                    A (100%)
+                                </button>
+                                <button 
+                                    onClick={() => handleGradeSelection('B')}
+                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                        shortAnswerGrades[currentQuestionIndex] === 'B' 
+                                        ? 'bg-blue-100 border-blue-500 text-blue-700 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:text-blue-300' 
+                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                    }`}
+                                >
+                                    B (75%)
+                                </button>
+                                <button 
+                                    onClick={() => handleGradeSelection('C')}
+                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                        shortAnswerGrades[currentQuestionIndex] === 'C' 
+                                        ? 'bg-yellow-100 border-yellow-500 text-yellow-700 ring-1 ring-yellow-500 dark:bg-yellow-900/30 dark:text-yellow-300' 
+                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                    }`}
+                                >
+                                    C (50%)
+                                </button>
+                                <button 
+                                    onClick={() => handleGradeSelection('D')}
+                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                        shortAnswerGrades[currentQuestionIndex] === 'D' 
+                                        ? 'bg-orange-100 border-orange-500 text-orange-700 ring-1 ring-orange-500 dark:bg-orange-900/30 dark:text-orange-300' 
+                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                    }`}
+                                >
+                                    D (25%)
+                                </button>
+                                <button 
+                                    onClick={() => handleGradeSelection('E')}
+                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                        shortAnswerGrades[currentQuestionIndex] === 'E' 
+                                        ? 'bg-red-100 border-red-500 text-red-700 ring-1 ring-red-500 dark:bg-red-900/30 dark:text-red-300' 
+                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                    }`}
+                                >
+                                    E (0%)
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -426,17 +557,24 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     const hasAnswer = isMcOrOx ? userAnswer !== null : tempShortAnswer.trim() !== '';
     const isCheckAnswerDisabled = !hasAnswer;
     
-    // For Short Answer, next button is disabled until self-assessment is done
-    const isNextButtonDisabled = isAnswerChecked && !isMcOrOx && selfAssessedCorrectness[currentQuestionIndex] === null;
+    // For Short Answer, next button is disabled until grade (A/B/C/D/E) is selected
+    const isNextButtonDisabled = isAnswerChecked && !isMcOrOx && shortAnswerGrades[currentQuestionIndex] === null;
 
     return (
         <div className="max-w-4xl mx-auto bg-white dark:bg-slate-800 p-3 sm:p-6 rounded-xl shadow-lg min-h-[50vh] flex flex-col transition-colors duration-300">
             <div className="flex-grow prose prose-sm sm:prose-base prose-slate dark:prose-invert max-w-none leading-snug">
                 <div className="flex flex-wrap justify-between items-center mb-1.5 gap-2">
                     <div className="flex items-center gap-2">
-                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 m-0">문제 {currentQuestionIndex + 1} / {questions.length}</p>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${currentQuestion.questionType === 'ox' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : currentQuestion.questionType === 'multiple-choice' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'}`}>
-                            {currentQuestion.questionType === 'ox' ? 'OX' : currentQuestion.questionType === 'multiple-choice' ? '객관식' : '서술형'}
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 m-0">문제 {currentQuestionIndex + 1} / {safeQuestions.length}</p>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            currentQuestion.questionType === 'ox' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 
+                            currentQuestion.questionType === 'multiple-choice' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 
+                            currentQuestion.questionType === 'creativity' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' :
+                            'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                        }`}>
+                            {currentQuestion.questionType === 'ox' ? 'OX' : 
+                             currentQuestion.questionType === 'multiple-choice' ? '객관식' : 
+                             currentQuestion.questionType === 'creativity' ? '창의/탐구' : '서술형'}
                         </span>
                     </div>
                     

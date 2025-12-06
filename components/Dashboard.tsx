@@ -5,6 +5,8 @@ import type { QuizResult } from '../types.ts';
 import { EDUCATION_CURRICULUMS } from '../constants.ts';
 import { Button } from './common/Button.tsx';
 import { Card } from './common/Card.tsx';
+import { Spinner } from './common/Spinner.tsx';
+import { generateLearningDiagnosis } from '../services/geminiService.ts';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -225,6 +227,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
     const [selectedResult, setSelectedResult] = useState<QuizResult | null>(null);
     const [selectedSubject, setSelectedSubject] = useState<string>('');
 
+    // Diagnosis State
+    const [diagnosisReport, setDiagnosisReport] = useState<string | null>(null);
+    const [isLoadingDiagnosis, setIsLoadingDiagnosis] = useState(false);
+
     // Calculate stats
     const totalQuizzes = studyHistory.length;
     const totalQuestionsAnswered = studyHistory.reduce((acc, curr) => acc + curr.totalQuestions, 0);
@@ -302,7 +308,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
         }
     };
 
+    const handleGenerateDiagnosis = async () => {
+        setIsLoadingDiagnosis(true);
+        setDiagnosisReport(null);
+        try {
+            const report = await generateLearningDiagnosis(studyHistory);
+            setDiagnosisReport(report);
+        } catch (error) {
+            alert(error instanceof Error ? error.message : "리포트를 생성하는 중 오류가 발생했습니다.");
+        } finally {
+            setIsLoadingDiagnosis(false);
+        }
+    };
+
     const colors = ['#0096FF', '#2ECC71', '#F39C12', '#8E44AD', '#F1C40F'];
+    const markdownComponents = {
+        p: (props: any) => <p className="mb-2 leading-relaxed" {...props} />,
+        h1: (props: any) => <h3 className="text-lg font-bold mt-4 mb-2 text-slate-900 dark:text-white" {...props} />,
+        h2: (props: any) => <h4 className="text-base font-bold mt-3 mb-2 text-slate-800 dark:text-slate-100" {...props} />,
+        h3: (props: any) => <h5 className="text-sm font-bold mt-2 mb-1 text-slate-800 dark:text-slate-100" {...props} />,
+        ul: (props: any) => <ul className="list-disc list-outside pl-4 mb-3 space-y-1" {...props} />,
+        ol: (props: any) => <ol className="list-decimal list-outside pl-4 mb-3 space-y-1" {...props} />,
+        li: (props: any) => <li className="leading-snug" {...props} />,
+        strong: (props: any) => <strong className="font-bold text-neon-blue dark:text-blue-400" {...props} />,
+    };
 
     return (
         <div className="max-w-4xl mx-auto px-2 pb-20">
@@ -316,6 +345,59 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
                 <StatsCard title="평균 점수" value={averageScore.toFixed(1)} unit="점" />
                 <StatsCard title="푼 문제 수" value={totalQuestionsAnswered} unit="문제" />
             </div>
+
+            {/* AI Diagnosis Report Section */}
+            <Card className="mb-6 border-2 border-neon-blue/20 bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-slate-800/80 overflow-visible relative">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                             <div className="p-1.5 bg-neon-blue/10 rounded-lg">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neon-blue"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"></path><path d="M8.5 8.5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5Z"></path><path d="M15.5 15.5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5Z"></path></svg>
+                             </div>
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                                AI 학습 코칭 리포트
+                            </h3>
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 leading-snug">
+                            지금까지의 학습 기록을 바탕으로 AI가 나의 강점과 보완할 점을 정밀하게 분석해드립니다.
+                        </p>
+                    </div>
+                    {(!diagnosisReport && !isLoadingDiagnosis) && (
+                         <Button 
+                            onClick={handleGenerateDiagnosis} 
+                            disabled={totalQuizzes === 0}
+                            className="shrink-0 shadow-md text-sm"
+                        >
+                            AI 상세 분석 받기
+                        </Button>
+                    )}
+                </div>
+
+                {isLoadingDiagnosis && (
+                    <div className="py-8">
+                        <Spinner text="AI가 학습 데이터를 분석하여 리포트를 작성 중입니다..." />
+                    </div>
+                )}
+
+                {diagnosisReport && !isLoadingDiagnosis && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 animate-fadeIn">
+                        <div className="prose prose-sm dark:prose-invert max-w-none bg-white dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                                {diagnosisReport}
+                            </ReactMarkdown>
+                        </div>
+                         <div className="mt-3 text-right">
+                            <Button 
+                                variant="secondary" 
+                                onClick={handleGenerateDiagnosis}
+                                className="!py-1.5 !px-3 text-xs"
+                            >
+                                다시 분석하기
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Card>
 
             {studyHistory.length > 0 ? (
                 <>

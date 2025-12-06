@@ -665,7 +665,7 @@ export const EDUCATION_CURRICULUMS: EducationCurriculum[] = [
                         grade: "중학교 1~3학년",
                         units: [
                             {
-                                name: "가. 듣기·말하기",
+                                name: "듣기·말하기",
                                 standards: [
                                     { id: "9국01-01", description: "듣기·말하기는 의미 공유의 과정임을 이해하고 듣기·말하기 활동을 한다." },
                                     { id: "9국01-02", description: "상대의 감정에 공감하며 적절하게 반응하는 대화를 나눈다." },
@@ -682,7 +682,7 @@ export const EDUCATION_CURRICULUMS: EducationCurriculum[] = [
                                 ]
                             },
                             {
-                                name: "나. 읽기",
+                                name: "읽기",
                                 standards: [
                                     { id: "9국02-01", description: "읽기는 글에 나타난 정보와 독자의 배경지식을 활용하여 문제를 해결하는 과정임을 이해하고 글을 읽는다." },
                                     { id: "9국02-02", description: "독자의 배경지식, 읽기 맥락 등을 활용하여 글의 내용을 예측한다." },
@@ -697,7 +697,7 @@ export const EDUCATION_CURRICULUMS: EducationCurriculum[] = [
                                 ]
                             },
                             {
-                                name: "다. 쓰기",
+                                name: "쓰기",
                                 standards: [
                                     { id: "9국03-01", description: "쓰기는 주제, 목적, 독자, 매체 등을 고려한 문제 해결 과정임을 이해하고 글을 쓴다." },
                                     { id: "9국03-02", description: "대상의 특성에 맞는 설명 방법을 사용하여 글을 쓴다." },
@@ -712,7 +712,7 @@ export const EDUCATION_CURRICULUMS: EducationCurriculum[] = [
                                 ]
                             },
                             {
-                                name: "라. 문법",
+                                name: "문법",
                                 standards: [
                                     { id: "9국04-01", description: "언어의 본질에 대한 이해를 바탕으로 하여 국어생활을 한다." },
                                     { id: "9국04-02", description: "음운의 체계를 알고 그 특성을 이해한다." },
@@ -726,7 +726,7 @@ export const EDUCATION_CURRICULUMS: EducationCurriculum[] = [
                                 ]
                             },
                             {
-                                name: "마. 문학",
+                                name: "문학",
                                 standards: [
                                     { id: "9국05-01", description: "문학은 심미적 체험을 바탕으로 한 다양한 소통 활동임을 알고 문학 활동을 한다." },
                                     { id: "9국05-02", description: "비유와 상징의 표현 효과를 바탕으로 작품을 수용하고 생산한다." },

@@ -16,6 +16,7 @@ const App: React.FC = () => {
     const [history, setHistory] = useState<HistoryState[]>([{ view: 'selector', standard: null }]);
     const [historyIndex, setHistoryIndex] = useState(0);
     const { theme, setTheme } = useTheme();
+    const [isCoolMode, setIsCoolMode] = useState(false);
 
     const currentHistoryEntry = history[historyIndex];
     const currentView = currentHistoryEntry.view;
@@ -108,6 +109,9 @@ const App: React.FC = () => {
         }
     }, [canGoForward]);
 
+    const handleToggleCoolMode = useCallback(() => {
+        setIsCoolMode(prev => !prev);
+    }, []);
 
     const renderContent = () => {
         switch (currentView) {
@@ -123,6 +127,7 @@ const App: React.FC = () => {
                         onApiKeySubmit={handleApiKeySubmission}
                         apiStatus={appStatus}
                         apiError={apiKeyError}
+                        isCoolMode={isCoolMode}
                     />
                 );
             case 'dashboard':
@@ -137,13 +142,18 @@ const App: React.FC = () => {
                         onApiKeySubmit={handleApiKeySubmission}
                         apiStatus={appStatus}
                         apiError={apiKeyError}
+                        isCoolMode={isCoolMode}
                     />
                 );
         }
     };
     
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-purple-violet/10 dark:from-slate-900 dark:to-slate-800 transition-colors duration-300">
+        <div className={`min-h-screen bg-gradient-to-br transition-colors duration-500 ease-in-out ${
+            isCoolMode 
+            ? 'from-sky-50 via-blue-50 to-cyan-100 dark:from-slate-900 dark:to-cyan-950' 
+            : 'from-gray-50 to-purple-violet/10 dark:from-slate-900 dark:to-slate-800'
+        }`}>
             <Header
               onGoHome={handleGoHome}
               onShowDashboard={handleShowDashboard}
@@ -153,6 +163,8 @@ const App: React.FC = () => {
               canGoForward={canGoForward}
               theme={theme}
               setTheme={setTheme}
+              onToggleCoolMode={handleToggleCoolMode}
+              isCoolMode={isCoolMode}
             />
             <main className="container mx-auto p-2 md:p-6">
                 {renderContent()}
