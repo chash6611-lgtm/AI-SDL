@@ -247,6 +247,10 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
                     </Button>
                 </div>
             </div>
+
+            <div className="mt-8 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">
+                Developed by 이포피(E4P)
+            </div>
         </div>
     );
 };

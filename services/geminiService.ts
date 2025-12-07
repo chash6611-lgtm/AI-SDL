@@ -130,6 +130,30 @@ export const getExplanationStream = async (subjectName: string, standardDescript
     }
 };
 
+export const generateSummary = async (text: string): Promise<string> => {
+    try {
+        const prompt = `
+        위 내용을 중학생이 한눈에 알아볼 수 있도록 3~7줄 내외의 글머리 기호(Bullet points)로 핵심만 요약해줘.
+        
+        ${MATH_RULE_PROMPT}
+
+        ---
+        ${text}
+        `;
+
+        const aiInstance = getAi();
+        const response = await aiInstance.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        return response.text || "요약을 생성할 수 없습니다.";
+    } catch (error) {
+        console.error("Summary generation error:", error);
+        throw new Error("요약 생성 중 오류가 발생했습니다.");
+    }
+};
+
 export const getFollowUpAnswerStream = async (
     subjectName: string,
     standardDescription: string,

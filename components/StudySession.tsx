@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getExplanationStream, generateQuestions, generateSpeech, QuestionRequest, getFollowUpAnswerStream, generateIllustration } from '../services/geminiService.ts';
+import { getExplanationStream, generateQuestions, generateSpeech, QuestionRequest, getFollowUpAnswerStream, generateIllustration, generateSummary } from '../services/geminiService.ts';
 import type { AchievementStandard, QuizQuestion, QuizResult, TTSVoice, QuestionType, ConversationMessage } from '../types.ts';
 import useLocalStorage from '../hooks/useLocalStorage.ts';
 import { Button } from './common/Button.tsx';
@@ -52,6 +52,12 @@ const StopIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     </svg>
 );
 
+const SparklesIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+    </svg>
+);
+
 interface StudySessionProps {
     subjectName: string;
     standard: AchievementStandard;
@@ -74,6 +80,10 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
     
     const [illustration, setIllustration] = useState<string | null>(null);
     const [isLoadingIllustration, setIsLoadingIllustration] = useState<boolean>(false);
+    
+    // Summary State
+    const [summary, setSummary] = useState<string | null>(null);
+    const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(false);
     
     const [questionCounts, setQuestionCounts] = useState<{ [key in QuestionType]: number }>(defaultQuestionCounts);
 
@@ -128,6 +138,7 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
             setIsLoadingExplanation(true);
             setIsStreamingExplanation(true);
             setExplanation('');
+            setSummary(null);
             explanationRef.current = '';
             setExplanationError(null);
             try {
@@ -265,6 +276,19 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
         }
     }, [explanation, selectedVoice, isSpeaking, isLoadingTTS, stopAllAudio]);
 
+    const handleGenerateSummary = async () => {
+        if (summary) return; // Already generated
+        
+        setIsLoadingSummary(true);
+        try {
+            const result = await generateSummary(explanationRef.current);
+            setSummary(result);
+        } catch (error) {
+            alert("요약 생성 중 오류가 발생했습니다.");
+        } finally {
+            setIsLoadingSummary(false);
+        }
+    };
 
     const handleGenerateQuiz = async () => {
         setIsGeneratingQuestions(true);
@@ -357,39 +381,51 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                         </div>
                     </div>
                     
-                     <div className="flex flex-wrap items-center justify-end mt-2 border-b border-slate-200 dark:border-slate-700 pb-2 gap-2">
-                        <select
-                            id="voice-select"
-                            value={selectedVoice}
-                            onChange={(e) => setSelectedVoice(e.target.value as TTSVoice)}
-                            disabled={isSpeaking || isLoadingTTS}
-                            className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-neon-blue"
-                            aria-label="목소리 선택"
-                        >
-                            {AVAILABLE_VOICES.map(voice => (
-                                <option key={voice.id} value={voice.id}>{voice.name}</option>
-                            ))}
-                        </select>
+                     <div className="flex flex-wrap items-center justify-between mt-2 border-b border-slate-200 dark:border-slate-700 pb-2 gap-2">
                         <button
-                            onClick={handleToggleSpeak}
-                            disabled={isLoadingExplanation || isStreamingExplanation}
-                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium disabled:opacity-50 transition-colors"
-                            aria-label={(isSpeaking || isLoadingTTS) ? "설명 듣기 중지" : "설명 듣기"}
+                            onClick={handleGenerateSummary}
+                            disabled={isLoadingExplanation || isStreamingExplanation || isLoadingSummary || summary !== null}
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/50 text-sm font-medium disabled:opacity-50 transition-colors"
+                            aria-label="핵심 요약 보기"
                         >
-                                {isLoadingTTS ? (
-                                <Spinner size="sm" />
-                                ) : isSpeaking ? (
-                                <>
-                                    <StopIcon className="h-4 w-4" />
-                                    <span className="hidden sm:inline">중지</span>
-                                </>
-                                ) : (
-                                <>
-                                    <SpeakerIcon className="h-4 w-4" />
-                                    <span className="hidden sm:inline">듣기</span>
-                                </>
-                            )}
+                            {isLoadingSummary ? <Spinner size="sm" /> : <SparklesIcon className="h-4 w-4" />}
+                            <span>핵심 요약</span>
                         </button>
+
+                        <div className="flex items-center gap-2">
+                            <select
+                                id="voice-select"
+                                value={selectedVoice}
+                                onChange={(e) => setSelectedVoice(e.target.value as TTSVoice)}
+                                disabled={isSpeaking || isLoadingTTS}
+                                className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-1.5 px-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-neon-blue"
+                                aria-label="목소리 선택"
+                            >
+                                {AVAILABLE_VOICES.map(voice => (
+                                    <option key={voice.id} value={voice.id}>{voice.name}</option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleToggleSpeak}
+                                disabled={isLoadingExplanation || isStreamingExplanation}
+                                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium disabled:opacity-50 transition-colors"
+                                aria-label={(isSpeaking || isLoadingTTS) ? "설명 듣기 중지" : "설명 듣기"}
+                            >
+                                    {isLoadingTTS ? (
+                                    <Spinner size="sm" />
+                                    ) : isSpeaking ? (
+                                    <>
+                                        <StopIcon className="h-4 w-4" />
+                                        <span className="hidden sm:inline">중지</span>
+                                    </>
+                                    ) : (
+                                    <>
+                                        <SpeakerIcon className="h-4 w-4" />
+                                        <span className="hidden sm:inline">듣기</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                      {ttsError && <p className="text-red-500 text-xs mt-1 text-right">{ttsError}</p>}
                 </header>
@@ -401,6 +437,22 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                             <p className="text-red-500 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm">{explanationError}</p>
                     ) : (
                         <div className="prose prose-sm sm:prose-base prose-slate dark:prose-invert max-w-none overflow-x-hidden leading-snug">
+                            {summary && (
+                                <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg shadow-sm">
+                                    <h3 className="text-amber-800 dark:text-amber-300 font-bold text-base mb-2 flex items-center gap-1.5">
+                                        <SparklesIcon className="w-4 h-4" /> 핵심 요약
+                                    </h3>
+                                    <div className="text-slate-800 dark:text-slate-200 text-sm">
+                                        <ReactMarkdown 
+                                            remarkPlugins={[remarkGfm, remarkMath]} 
+                                            rehypePlugins={[[rehypeKatex, { output: 'html' }]]}
+                                            components={markdownComponents}
+                                        >
+                                            {summary}
+                                        </ReactMarkdown>
+                                    </div>
+                                </div>
+                            )}
                             <div className="w-full overflow-x-auto">
                                 <ReactMarkdown 
                                     remarkPlugins={[remarkGfm, remarkMath]} 
