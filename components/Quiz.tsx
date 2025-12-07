@@ -120,6 +120,20 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     const audioContextRef = useRef<AudioContext | null>(null);
     const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+    // Determine current question and its mode (Selection vs Text Input)
+    const currentQuestion = safeQuestions[currentQuestionIndex];
+    let type = currentQuestion?.questionType;
+    let options = currentQuestion?.options;
+    
+    // Ensure OX questions always have options if not provided
+    if (type === 'ox' && (!options || options.length === 0)) {
+        options = ['O', 'X'];
+    }
+    
+    const hasOptions = options && options.length > 0;
+    // Selection mode applies ONLY if it's MC/OX AND has valid options to select
+    const isSelectionMode = (type === 'multiple-choice' || type === 'ox') && hasOptions;
+
 
     useEffect(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -132,16 +146,18 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     
     // Sync tempShortAnswer with saved user answer when navigating
     useEffect(() => {
-        if (!hasQuestions) return;
-        const savedAnswer = userAnswers[currentQuestionIndex];
-        const currentQType = safeQuestions[currentQuestionIndex].questionType;
+        if (!hasQuestions || !currentQuestion) return;
         
-        if (currentQType !== 'multiple-choice' && currentQType !== 'ox') {
+        const savedAnswer = userAnswers[currentQuestionIndex];
+        
+        // If we are NOT in selection mode (Short Answer, Creativity, OR MC/OX Fallback),
+        // we need to sync the text input.
+        if (!isSelectionMode) {
              setTempShortAnswer(savedAnswer || '');
         } else {
              setTempShortAnswer('');
         }
-    }, [currentQuestionIndex, userAnswers, checkedStates, safeQuestions, hasQuestions]);
+    }, [currentQuestionIndex, userAnswers, checkedStates, safeQuestions, hasQuestions, isSelectionMode, currentQuestion]);
 
     const stopAudio = useCallback(() => {
         if (audioSourceRef.current) {
@@ -167,11 +183,9 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
         return () => stopAudio();
     }, [stopAudio]);
     
-    if (!hasQuestions) {
+    if (!hasQuestions || !currentQuestion) {
         return <div className="p-8 text-center text-red-500 bg-white dark:bg-slate-800 rounded-xl shadow">문제 데이터가 없습니다. 다시 시도해주세요.</div>;
     }
-
-    const currentQuestion = safeQuestions[currentQuestionIndex];
 
     const handlePlayScript = async (text: string) => {
         if (isSpeaking || isLoadingTTS) {
@@ -230,11 +244,8 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     };
 
     const handleCheckAnswer = () => {
-        // If it's short-answer (or treated as such), save the temp answer to main state
-        const type = currentQuestion.questionType;
-        const isMcOrOx = type === 'multiple-choice' || type === 'ox';
-        
-        if (!isMcOrOx) {
+        // If not in selection mode (meaning text input was used), save the text answer
+        if (!isSelectionMode) {
             const newAnswers = [...userAnswers];
             newAnswers[currentQuestionIndex] = tempShortAnswer;
             setUserAnswers(newAnswers);
@@ -285,11 +296,16 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
             // Calculate final results
             let totalEarnedPoints = 0;
             const calculatedCorrectness = safeQuestions.map((question, index) => {
-                 const type = question.questionType;
-                 const isMcOrOx = type === 'multiple-choice' || type === 'ox';
+                 const qType = question.questionType;
+                 const qOptions = question.options;
+                 // Recalculate mode for each question to know how to grade
+                 const qHasOptions = (qType === 'multiple-choice' && qOptions && qOptions.length > 0) || (qType === 'ox');
+                 const isSelection = (qType === 'multiple-choice' || qType === 'ox') && qHasOptions;
+                 
                  const ans = userAnswers[index];
                  
-                 if (!isMcOrOx) {
+                 // If it's strictly Short Answer or Creativity, use manual grade
+                 if (qType === 'short-answer' || qType === 'creativity') {
                      const grade = shortAnswerGrades[index];
                      if (grade === 'A') {
                          totalEarnedPoints += 1;
@@ -307,6 +323,7 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
                          return false;
                      }
                  } else {
+                     // For MC/OX (including fallback text input), check exact match
                      const isCorrect = isAnswerMatch(ans, question.answer);
                      if (isCorrect) totalEarnedPoints += 1;
                      return isCorrect;
@@ -358,24 +375,11 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
     };
 
     const renderQuestionInput = () => {
-        const type = currentQuestion.questionType;
-        const isOx = type === 'ox';
-        const isMc = type === 'multiple-choice';
-
-        if (isMc || isOx) {
-            let options = currentQuestion.options;
-            // Ensure OX questions always have options if not provided
-            if (isOx && (!options || options.length === 0)) {
-                options = ['O', 'X'];
-            }
-            
-            if (!options || options.length === 0) {
-                 return <div className="text-red-500 text-sm">옵션을 불러올 수 없습니다.</div>;
-            }
-
+        if (isSelectionMode) {
+            // Safe to assume options exist because isSelectionMode is true
             return (
                 <div className="space-y-2 mt-4">
-                    {options.map((option, index) => {
+                    {options!.map((option, index) => {
                         const isCorrectAnswer = isAnswerMatch(option, currentQuestion.answer);
                         const showCorrectLabel = isAnswerChecked && isCorrectAnswer;
                         const optionTranslation = currentQuestion.optionsTranslation?.[index];
@@ -421,7 +425,9 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
             );
         }
 
-        // Short-answer UI (for both 'short-answer' and 'creativity')
+        // Short-answer UI (for short-answer, creativity, OR MC fallback)
+        const isMcFallback = (type === 'multiple-choice' || type === 'ox') && !hasOptions;
+        
         return (
             <div className="mt-4">
                 <input
@@ -433,6 +439,13 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
                     placeholder={type === 'creativity' ? "창의적인 답변을 자유롭게 작성해보세요..." : "정답을 입력하세요..."}
                     autoComplete="off"
                 />
+                
+                {isMcFallback && (
+                    <p className="text-xs text-orange-500 mt-2">
+                        ⚠️ 보기가 생성되지 않아 주관식으로 전환되었습니다. 정답을 입력해주세요.
+                    </p>
+                )}
+
                 {isAnswerChecked && (
                     <div className="mt-4 p-3 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-600">
                         <p className="font-semibold text-slate-800 dark:text-slate-200 mb-1.5 text-sm">
@@ -457,108 +470,120 @@ export const Quiz: React.FC<QuizProps> = ({ questions, onSubmit }) => {
                         <div className="mt-4 border-t border-slate-200 dark:border-slate-600 pt-4">
                             <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-2">채점하기</p>
                             
-                            {/* AI Grading Section */}
-                            <div className="mb-4">
-                                {!aiEvaluations[currentQuestionIndex] ? (
-                                    <Button 
-                                        variant="secondary" 
-                                        onClick={handleAiGrading} 
-                                        disabled={isAiGrading}
-                                        className="text-xs !py-1.5 !px-3"
-                                    >
-                                        {isAiGrading ? <Spinner size="sm" /> : '🤖 AI 채점 결과 보기'}
-                                    </Button>
-                                ) : (
-                                    <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-600 text-sm">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-bold text-neon-blue">AI 점수:</span>
-                                            <span className={`font-bold px-2 py-0.5 rounded text-xs ${
-                                                aiEvaluations[currentQuestionIndex]!.grade === 'A' ? 'bg-green-100 text-green-700' :
-                                                aiEvaluations[currentQuestionIndex]!.grade === 'B' ? 'bg-blue-100 text-blue-700' :
-                                                aiEvaluations[currentQuestionIndex]!.grade === 'C' ? 'bg-yellow-100 text-yellow-700' :
-                                                aiEvaluations[currentQuestionIndex]!.grade === 'D' ? 'bg-orange-100 text-orange-700' :
-                                                'bg-red-100 text-red-700'
-                                            }`}>
-                                                {aiEvaluations[currentQuestionIndex]!.grade}
-                                            </span>
-                                        </div>
-                                        <p className="text-slate-600 dark:text-slate-300 text-xs leading-snug">
-                                            {aiEvaluations[currentQuestionIndex]!.feedback}
-                                        </p>
+                            {/* Grading Section - ONLY for Short Answer / Creativity */}
+                            {/* For MC/OX fallback, we rely on string matching (auto-grade) in handleNext, so we hide manual buttons */}
+                            {(type === 'short-answer' || type === 'creativity') ? (
+                                <>
+                                    {/* AI Grading Section */}
+                                    <div className="mb-4">
+                                        {!aiEvaluations[currentQuestionIndex] ? (
+                                            <Button 
+                                                variant="secondary" 
+                                                onClick={handleAiGrading} 
+                                                disabled={isAiGrading}
+                                                className="text-xs !py-1.5 !px-3"
+                                            >
+                                                {isAiGrading ? <Spinner size="sm" /> : '🤖 AI 채점 결과 보기'}
+                                            </Button>
+                                        ) : (
+                                            <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-600 text-sm">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="font-bold text-neon-blue">AI 점수:</span>
+                                                    <span className={`font-bold px-2 py-0.5 rounded text-xs ${
+                                                        aiEvaluations[currentQuestionIndex]!.grade === 'A' ? 'bg-green-100 text-green-700' :
+                                                        aiEvaluations[currentQuestionIndex]!.grade === 'B' ? 'bg-blue-100 text-blue-700' :
+                                                        aiEvaluations[currentQuestionIndex]!.grade === 'C' ? 'bg-yellow-100 text-yellow-700' :
+                                                        aiEvaluations[currentQuestionIndex]!.grade === 'D' ? 'bg-orange-100 text-orange-700' :
+                                                        'bg-red-100 text-red-700'
+                                                    }`}>
+                                                        {aiEvaluations[currentQuestionIndex]!.grade}
+                                                    </span>
+                                                </div>
+                                                <p className="text-slate-600 dark:text-slate-300 text-xs leading-snug">
+                                                    {aiEvaluations[currentQuestionIndex]!.feedback}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
 
-                            {/* User Self Grading Section */}
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">AI 평가를 참고하여 최종 점수를 선택해주세요.</p>
-                            <div className="grid grid-cols-5 gap-1">
-                                <button 
-                                    onClick={() => handleGradeSelection('A')}
-                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
-                                        shortAnswerGrades[currentQuestionIndex] === 'A' 
-                                        ? 'bg-green-100 border-green-500 text-green-700 ring-1 ring-green-500 dark:bg-green-900/30 dark:text-green-300' 
-                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
-                                    }`}
-                                >
-                                    A (100%)
-                                </button>
-                                <button 
-                                    onClick={() => handleGradeSelection('B')}
-                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
-                                        shortAnswerGrades[currentQuestionIndex] === 'B' 
-                                        ? 'bg-blue-100 border-blue-500 text-blue-700 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:text-blue-300' 
-                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
-                                    }`}
-                                >
-                                    B (75%)
-                                </button>
-                                <button 
-                                    onClick={() => handleGradeSelection('C')}
-                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
-                                        shortAnswerGrades[currentQuestionIndex] === 'C' 
-                                        ? 'bg-yellow-100 border-yellow-500 text-yellow-700 ring-1 ring-yellow-500 dark:bg-yellow-900/30 dark:text-yellow-300' 
-                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
-                                    }`}
-                                >
-                                    C (50%)
-                                </button>
-                                <button 
-                                    onClick={() => handleGradeSelection('D')}
-                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
-                                        shortAnswerGrades[currentQuestionIndex] === 'D' 
-                                        ? 'bg-orange-100 border-orange-500 text-orange-700 ring-1 ring-orange-500 dark:bg-orange-900/30 dark:text-orange-300' 
-                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
-                                    }`}
-                                >
-                                    D (25%)
-                                </button>
-                                <button 
-                                    onClick={() => handleGradeSelection('E')}
-                                    className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
-                                        shortAnswerGrades[currentQuestionIndex] === 'E' 
-                                        ? 'bg-red-100 border-red-500 text-red-700 ring-1 ring-red-500 dark:bg-red-900/30 dark:text-red-300' 
-                                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
-                                    }`}
-                                >
-                                    E (0%)
-                                </button>
-                            </div>
+                                    {/* User Self Grading Section */}
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">AI 평가를 참고하여 최종 점수를 선택해주세요.</p>
+                                    <div className="grid grid-cols-5 gap-1">
+                                        <button 
+                                            onClick={() => handleGradeSelection('A')}
+                                            className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                                shortAnswerGrades[currentQuestionIndex] === 'A' 
+                                                ? 'bg-green-100 border-green-500 text-green-700 ring-1 ring-green-500 dark:bg-green-900/30 dark:text-green-300' 
+                                                : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                            }`}
+                                        >
+                                            A (100%)
+                                        </button>
+                                        <button 
+                                            onClick={() => handleGradeSelection('B')}
+                                            className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                                shortAnswerGrades[currentQuestionIndex] === 'B' 
+                                                ? 'bg-blue-100 border-blue-500 text-blue-700 ring-1 ring-blue-500 dark:bg-blue-900/30 dark:text-blue-300' 
+                                                : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                            }`}
+                                        >
+                                            B (75%)
+                                        </button>
+                                        <button 
+                                            onClick={() => handleGradeSelection('C')}
+                                            className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                                shortAnswerGrades[currentQuestionIndex] === 'C' 
+                                                ? 'bg-yellow-100 border-yellow-500 text-yellow-700 ring-1 ring-yellow-500 dark:bg-yellow-900/30 dark:text-yellow-300' 
+                                                : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                            }`}
+                                        >
+                                            C (50%)
+                                        </button>
+                                        <button 
+                                            onClick={() => handleGradeSelection('D')}
+                                            className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                                shortAnswerGrades[currentQuestionIndex] === 'D' 
+                                                ? 'bg-orange-100 border-orange-500 text-orange-700 ring-1 ring-orange-500 dark:bg-orange-900/30 dark:text-orange-300' 
+                                                : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                            }`}
+                                        >
+                                            D (25%)
+                                        </button>
+                                        <button 
+                                            onClick={() => handleGradeSelection('E')}
+                                            className={`py-2 px-1 rounded border text-[10px] sm:text-xs font-medium transition-all ${
+                                                shortAnswerGrades[currentQuestionIndex] === 'E' 
+                                                ? 'bg-red-100 border-red-500 text-red-700 ring-1 ring-red-500 dark:bg-red-900/30 dark:text-red-300' 
+                                                : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'
+                                            }`}
+                                        >
+                                            E (0%)
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                                    {isMcFallback 
+                                        ? "이 문제는 텍스트 일치 여부로 자동 채점되었습니다." 
+                                        : "정답을 확인하고 다음 문제로 넘어가세요."
+                                    }
+                                </p>
+                            )}
                         </div>
                     </div>
                 )}
             </div>
         );
     };
-
-    const type = currentQuestion.questionType;
-    const isMcOrOx = type === 'multiple-choice' || type === 'ox';
     
     // Logic for enabling buttons
-    const hasAnswer = isMcOrOx ? userAnswer !== null : tempShortAnswer.trim() !== '';
+    const hasAnswer = isSelectionMode ? userAnswer !== null : tempShortAnswer.trim() !== '';
     const isCheckAnswerDisabled = !hasAnswer;
     
-    // For Short Answer, next button is disabled until grade (A/B/C/D/E) is selected
-    const isNextButtonDisabled = isAnswerChecked && !isMcOrOx && shortAnswerGrades[currentQuestionIndex] === null;
+    // For Short Answer/Creativity, next button is disabled until grade is selected. 
+    // For MC fallback, it's auto-graded, so we don't wait for grade selection.
+    const isManualGradingRequired = type === 'short-answer' || type === 'creativity';
+    const isNextButtonDisabled = isAnswerChecked && isManualGradingRequired && shortAnswerGrades[currentQuestionIndex] === null;
 
     return (
         <div className="max-w-4xl mx-auto bg-white dark:bg-slate-800 p-3 sm:p-6 rounded-xl shadow-lg min-h-[50vh] flex flex-col transition-colors duration-300">

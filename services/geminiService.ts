@@ -278,6 +278,7 @@ export const generateQuestions = async (subjectName: string, standardDescription
             - ${languageInstruction}
             - ${explanationInstruction}
             - ${passageInstruction}
+            - **필수**: 객관식('multiple-choice') 문제의 경우, 반드시 4~5개의 선택지를 'options' 배열에 포함해야 합니다. 선택지가 없으면 문제가 성립되지 않습니다.
             - **창의/탐구형 문제('creativity')의 경우**: 'answer' 필드에는 학생이 작성해야 할 모범 답안의 예시나, 채점 시 고려해야 할 핵심 평가 요소(키워드, 논리 구조 등)를 상세히 기술하세요.
             - 문제의 난이도는 중학생이 풀 수 있는 수준으로 맞춰주세요.
             - 시각 자료가 문제 풀이에 결정적인 도움이 되는 경우에만 'imagePrompt'에 영어 프롬프트 작성 (없으면 빈 문자열).
@@ -315,6 +316,7 @@ export const generateQuestions = async (subjectName: string, standardDescription
                             options: {
                                 type: Type.ARRAY,
                                 items: { type: Type.STRING },
+                                description: "Required for multiple-choice questions. Must include 4-5 options."
                             },
                             optionsTranslation: {
                                 type: Type.ARRAY,
