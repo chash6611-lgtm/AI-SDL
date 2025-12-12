@@ -200,7 +200,7 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
                             Google AI Studio API 키
                         </label>
                         <p className="text-[11px] sm:text-xs text-[#001F3F] dark:text-slate-300 mb-2 leading-snug">
-                            Google AI 서비스를 사용하여 맞춤형 학습 콘텐츠를 생성하려면 API 키 입력이 필요합니다.
+                            Google AI 기반의 맞춤형 학습 콘텐츠 생성을 위해서는 API 키 입력이 필요합니다. 다만, 만 18세 미만 이용자는 직접 API 키를 발급받을 수 없으므로, 보호자가 대신 발급한 후 학생에게 전달(예: 이메일 전송)하여 사용할 수 있습니다.
                         </p>
                         <div className="flex gap-2">
                             <input 
