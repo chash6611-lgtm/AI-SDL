@@ -301,13 +301,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
     // Reverse history for list view (newest first)
     const reversedHistory = useMemo(() => [...studyHistory].reverse(), [studyHistory]);
 
-    const handleDelete = (id: string) => {
-        if (window.confirm("정말로 이 학습 기록을 삭제하시겠습니까?")) {
-            const newHistory = studyHistory.filter(item => item.id !== id);
-            setStudyHistory(newHistory);
-        }
-    };
-
     const handleGenerateDiagnosis = async () => {
         setIsLoadingDiagnosis(true);
         setDiagnosisReport(null);
@@ -318,6 +311,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
             alert(error instanceof Error ? error.message : "리포트를 생성하는 중 오류가 발생했습니다.");
         } finally {
             setIsLoadingDiagnosis(false);
+        }
+    };
+
+    const handleDeleteHistoryItem = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (window.confirm('정말 이 학습 기록을 삭제하시겠습니까?')) {
+            setStudyHistory(prev => prev.filter(item => item.id !== id));
         }
     };
 
@@ -352,7 +352,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                              <div className="p-1.5 bg-neon-blue/10 rounded-lg">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neon-blue"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"></path><path d="M8.5 8.5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5Z"></path><path d="M15.5 15.5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5Z"></path></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neon-blue"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5 4 4 0 0 1-5-5"></path><path d="M8.5 8.5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5Z"></path><path d="M15.5 15.5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5Z"></path></svg>
                              </div>
                             <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
                                 AI 학습 코칭 리포트
@@ -509,7 +509,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
                         </div>
                     </Card>
 
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">전체 학습 기록</h3>
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">전체 학습 기록</h3>
+                    </div>
                     <div className="space-y-3">
                         {reversedHistory.map((result) => {
                              const details = findDetailsForStandard(result.standardId);
@@ -548,20 +550,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onGoHome }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700" onClick={e => e.stopPropagation()}>
+                                        <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-700" onClick={e => e.stopPropagation()}>
+                                            <button 
+                                                onClick={(e) => handleDeleteHistoryItem(result.id, e)}
+                                                className="flex items-center gap-1 text-xs text-slate-400 hover:text-red-500 transition-colors px-1 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                                삭제
+                                            </button>
                                             <Button 
                                                 variant="secondary" 
                                                 className="!py-1.5 !px-3 text-xs"
                                                 onClick={() => setSelectedResult(result)}
                                             >
                                                 상세보기
-                                            </Button>
-                                            <Button 
-                                                variant="secondary" 
-                                                className="!py-1.5 !px-3 text-xs !text-red-600 hover:!bg-red-50 dark:!text-red-400 dark:hover:!bg-red-900/30"
-                                                onClick={() => handleDelete(result.id)}
-                                            >
-                                                삭제
                                             </Button>
                                         </div>
                                     </div>

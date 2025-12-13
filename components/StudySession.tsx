@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getExplanationStream, generateQuestions, generateSpeech, QuestionRequest, getFollowUpAnswerStream, generateIllustration, generateSummary } from '../services/geminiService.ts';
-import type { AchievementStandard, QuizQuestion, QuizResult, TTSVoice, QuestionType, ConversationMessage } from '../types.ts';
+import { getExplanationStream, generateQuestions, generateSpeech, QuestionRequest, getFollowUpAnswerStream, generateIllustration, generateKeyConceptSummary } from '../services/geminiService.ts';
+import type { AchievementStandard, QuizQuestion, QuizResult, TTSVoice, QuestionType, ConversationMessage, Difficulty } from '../types.ts';
 import useLocalStorage from '../hooks/useLocalStorage.ts';
 import { Button } from './common/Button.tsx';
 import { Spinner } from './common/Spinner.tsx';
@@ -54,7 +54,7 @@ const StopIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 
 const SparklesIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z" />
     </svg>
 );
 
@@ -86,6 +86,7 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
     const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(false);
     
     const [questionCounts, setQuestionCounts] = useState<{ [key in QuestionType]: number }>(defaultQuestionCounts);
+    const [difficulty, setDifficulty] = useState<Difficulty>('medium');
 
     const [questions, setQuestions] = useState<QuizQuestion[] | null>(null);
     const [isGeneratingQuestions, setIsGeneratingQuestions] = useState<boolean>(false);
@@ -111,6 +112,9 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
     const [isAnswering, setIsAnswering] = useState<boolean>(false);
     const [qnaError, setQnaError] = useState<string | null>(null);
     const conversationEndRef = useRef<HTMLDivElement>(null);
+
+    // Math Input State
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
     
     const stopAllAudio = useCallback(() => {
         if (audioSourceRef.current) {
@@ -138,7 +142,6 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
             setIsLoadingExplanation(true);
             setIsStreamingExplanation(true);
             setExplanation('');
-            setSummary(null);
             explanationRef.current = '';
             setExplanationError(null);
             try {
@@ -169,7 +172,6 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
             setIsLoadingIllustration(true);
             setIllustration(null);
             try {
-                // Use standard description directly for parallel generation
                 const imageBase64 = await generateIllustration(standard.description);
                 if (!isCancelled) {
                     setIllustration(imageBase64);
@@ -183,9 +185,23 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
             }
         };
 
-        // Execute in parallel to reduce wait time
+        const fetchSummary = async () => {
+            setIsLoadingSummary(true);
+            setSummary(null);
+            try {
+                const result = await generateKeyConceptSummary(subjectName, standard.description);
+                if (!isCancelled) setSummary(result);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                if (!isCancelled) setIsLoadingSummary(false);
+            }
+        };
+
+        // Execute in parallel
         fetchExplanation();
         fetchIllustration();
+        fetchSummary();
 
         return () => {
             isCancelled = true;
@@ -276,20 +292,6 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
         }
     }, [explanation, selectedVoice, isSpeaking, isLoadingTTS, stopAllAudio]);
 
-    const handleGenerateSummary = async () => {
-        if (summary) return; // Already generated
-        
-        setIsLoadingSummary(true);
-        try {
-            const result = await generateSummary(explanationRef.current);
-            setSummary(result);
-        } catch (error) {
-            alert("요약 생성 중 오류가 발생했습니다.");
-        } finally {
-            setIsLoadingSummary(false);
-        }
-    };
-
     const handleGenerateQuiz = async () => {
         setIsGeneratingQuestions(true);
         setQuestionsError(null);
@@ -304,7 +306,7 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                 return;
             }
 
-            const generated = await generateQuestions(subjectName, standard.description, requests);
+            const generated = await generateQuestions(subjectName, standard.description, requests, difficulty);
             if (!generated || generated.length === 0) {
                 throw new Error("문제를 생성하지 못했습니다. 잠시 후 다시 시도해주세요.");
             }
@@ -346,6 +348,41 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
         setLastResult(newResult);
         setQuizFinished(true);
     }, [standard, subjectName, studyHistory, setStudyHistory, questions]);
+
+    const mathSymbols = [
+        { label: 'x²', insert: '$x^2$', move: 0 },
+        { label: 'xⁿ', insert: '$x^{}$', move: -2 },
+        { label: '√', insert: '$\\sqrt{}$', move: -2 },
+        { label: '분수', insert: '$\\frac{}{}$', move: -4 },
+        { label: '×', insert: '$\\times$', move: 0 },
+        { label: '÷', insert: '$\\div$', move: 0 },
+        { label: '±', insert: '$\\pm$', move: 0 },
+        { label: '≤', insert: '$\\le$', move: 0 },
+        { label: '≥', insert: '$\\ge$', move: 0 },
+        { label: '≠', insert: '$\\ne$', move: 0 },
+        { label: 'π', insert: '$\\pi$', move: 0 },
+        { label: '°', insert: '$^\\circ$', move: 0 },
+        { label: '△', insert: '$\\triangle$', move: 0 },
+        { label: '∠', insert: '$\\angle$', move: 0 },
+    ];
+
+    const insertMathSymbol = (insert: string, move: number) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        
+        const newText = text.substring(0, start) + insert + text.substring(end);
+        setUserQuestion(newText);
+        
+        setTimeout(() => {
+            textarea.focus();
+            const newCursor = start + insert.length + move;
+            textarea.setSelectionRange(newCursor, newCursor);
+        }, 0);
+    };
     
     const markdownComponents = {
         table: (props: any) => <div className="overflow-x-auto mb-2"><table className="table-auto w-full border-collapse border border-slate-300 dark:border-slate-600" {...props} /></div>,
@@ -381,17 +418,7 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                         </div>
                     </div>
                     
-                     <div className="flex flex-wrap items-center justify-between mt-2 border-b border-slate-200 dark:border-slate-700 pb-2 gap-2">
-                        <button
-                            onClick={handleGenerateSummary}
-                            disabled={isLoadingExplanation || isStreamingExplanation || isLoadingSummary || summary !== null}
-                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/50 text-sm font-medium disabled:opacity-50 transition-colors"
-                            aria-label="핵심 요약 보기"
-                        >
-                            {isLoadingSummary ? <Spinner size="sm" /> : <SparklesIcon className="h-4 w-4" />}
-                            <span>핵심 요약</span>
-                        </button>
-
+                     <div className="flex flex-wrap items-center justify-end mt-2 border-b border-slate-200 dark:border-slate-700 pb-2 gap-2">
                         <div className="flex items-center gap-2">
                             <select
                                 id="voice-select"
@@ -437,19 +464,26 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                             <p className="text-red-500 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm">{explanationError}</p>
                     ) : (
                         <div className="prose prose-sm sm:prose-base prose-slate dark:prose-invert max-w-none overflow-x-hidden leading-snug">
-                            {summary && (
+                            {(summary || isLoadingSummary) && (
                                 <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg shadow-sm">
                                     <h3 className="text-amber-800 dark:text-amber-300 font-bold text-base mb-2 flex items-center gap-1.5">
                                         <SparklesIcon className="w-4 h-4" /> 핵심 요약
                                     </h3>
                                     <div className="text-slate-800 dark:text-slate-200 text-sm">
-                                        <ReactMarkdown 
-                                            remarkPlugins={[remarkGfm, remarkMath]} 
-                                            rehypePlugins={[[rehypeKatex, { output: 'html' }]]}
-                                            components={markdownComponents}
-                                        >
-                                            {summary}
-                                        </ReactMarkdown>
+                                        {isLoadingSummary ? (
+                                            <div className="flex items-center gap-2 text-amber-700/70 dark:text-amber-400/70 py-2">
+                                                <Spinner size="sm" />
+                                                <span>핵심 내용을 요약하고 있어요...</span>
+                                            </div>
+                                        ) : (
+                                            <ReactMarkdown 
+                                                remarkPlugins={[remarkGfm, remarkMath]} 
+                                                rehypePlugins={[[rehypeKatex, { output: 'html' }]]}
+                                                components={markdownComponents}
+                                            >
+                                                {summary || ""}
+                                            </ReactMarkdown>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -506,7 +540,22 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                             </div>
 
                             <form onSubmit={handleAskQuestion}>
+                                <div className="flex gap-1.5 mb-2 overflow-x-auto pb-1 items-center">
+                                     {mathSymbols.map((item, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => insertMathSymbol(item.insert, item.move)}
+                                            className="flex-shrink-0 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs sm:text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-slate-700 dark:text-slate-200"
+                                            title={item.insert}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                
                                 <textarea
+                                    ref={textareaRef}
                                     value={userQuestion}
                                     onChange={(e) => setUserQuestion(e.target.value)}
                                     placeholder="여기에 질문을 입력하세요..."
@@ -520,6 +569,22 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                                         }
                                     }}
                                 />
+                                
+                                {userQuestion.trim().length > 0 && (
+                                    <div className="mt-2 p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600 text-sm">
+                                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">수식 미리보기 (Preview)</p>
+                                        <div className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200">
+                                            <ReactMarkdown 
+                                                remarkPlugins={[remarkGfm, remarkMath]}
+                                                rehypePlugins={[[rehypeKatex, { output: 'html' }]]} 
+                                                components={markdownComponents}
+                                            >
+                                                {userQuestion}
+                                            </ReactMarkdown>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex justify-end items-center mt-1.5 gap-2">
                                     <Button type="submit" disabled={!userQuestion.trim() || isAnswering} className="!py-1.5 !px-3 text-xs sm:text-sm">
                                         {isAnswering ? <Spinner size="sm" /> : '질문 전송'}
@@ -533,6 +598,21 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
 
                         <section>
                              <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 mb-3">이해도 확인하기(문항수 선택 가능)</h2>
+                             
+                             <div className="mb-4 text-center">
+                                <label htmlFor="difficulty-select" className="block text-xs font-bold text-neon-blue mb-1">난이도</label>
+                                <select 
+                                    id="difficulty-select" 
+                                    value={difficulty} 
+                                    onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+                                    className="w-48 text-center p-1.5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-neon-blue"
+                                >
+                                    <option value="low">하</option>
+                                    <option value="medium">중</option>
+                                    <option value="high">상</option>
+                                </select>
+                             </div>
+
                             <div className="grid grid-cols-4 gap-2 mb-3">
                                 <div>
                                     <label htmlFor="mc-questions" className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-0.5 text-center">객관식</label>
@@ -566,7 +646,7 @@ export const StudySession: React.FC<StudySessionProps> = ({ subjectName, standar
                 )}
             </div>
         );
-    }
+    };
     
     if (quizFinished && lastResult) {
       return (

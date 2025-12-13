@@ -169,9 +169,6 @@ const App: React.FC = () => {
             <main className="container mx-auto p-2 md:p-6">
                 {renderContent()}
             </main>
-            <footer className={`text-center text-xs text-slate-400 dark:text-slate-500 ${currentView === 'selector' ? 'pt-6 pb-28 md:py-6' : 'py-6'}`}>
-                Developed by 이포피(E4P) | e4p2024@gmail.com
-            </footer>
         </div>
     );
 };

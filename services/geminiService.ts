@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from '@google/genai';
-import type { QuizQuestion, TTSVoice, QuestionType, ConversationMessage, ShortAnswerEvaluation, QuizResult } from '../types.ts';
+import type { QuizQuestion, TTSVoice, QuestionType, ConversationMessage, ShortAnswerEvaluation, QuizResult, Difficulty } from '../types.ts';
 
 let ai: GoogleGenAI | null = null;
 
@@ -130,6 +130,34 @@ export const getExplanationStream = async (subjectName: string, standardDescript
     }
 };
 
+export const generateKeyConceptSummary = async (subjectName: string, standardDescription: string): Promise<string> => {
+    try {
+        const prompt = `
+        당신은 중학생을 위한 친절한 AI 튜터입니다.
+        
+        과목: ${subjectName}
+        성취기준: "${standardDescription}"
+        
+        위 성취기준의 핵심 내용을 중학생이 한눈에 파악할 수 있도록 3~5줄 내외의 **글머리 기호(Bullet points)**로 요약해서 정리해줘.
+        다음은 중학생이 한눈에 알아볼 수 있도록 핵심만 요약한 내용입니다. 처럼 시작하는 문구로 작성해줘.
+        어려운 용어는 쉽게 풀어쓰고, 핵심만 간결하게 작성해줘.
+        
+        ${MATH_RULE_PROMPT}
+        `;
+
+        const aiInstance = getAi();
+        const response = await aiInstance.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        return response.text || "";
+    } catch (error) {
+        console.error("Key Concept Summary generation error:", error);
+        return "";
+    }
+};
+
 export const generateSummary = async (text: string): Promise<string> => {
     try {
         const prompt = `
@@ -233,7 +261,7 @@ export interface QuestionRequest {
     count: number;
 }
 
-export const generateQuestions = async (subjectName: string, standardDescription: string, requests: QuestionRequest[]): Promise<QuizQuestion[]> => {
+export const generateQuestions = async (subjectName: string, standardDescription: string, requests: QuestionRequest[], difficulty: Difficulty = 'medium'): Promise<QuizQuestion[]> => {
     try {
         const totalQuestions = requests.reduce((sum, req) => sum + req.count, 0);
         if (totalQuestions === 0) {
@@ -267,6 +295,14 @@ export const generateQuestions = async (subjectName: string, standardDescription
             ? '**중요**: 듣기(Listening)나 독해(Reading) 평가인 경우, 대화문(Script)이나 지문(Passage)은 반드시 `passage` 필드(영어)와 `passageTranslation` 필드(한국어)에 분리하여 작성해야 합니다. `passage` 필드에는 한글을 포함하지 마세요.'
             : '국어 과목이나 지문이 필요한 경우 `passage` 필드에 지문을 작성하세요.';
 
+        const difficultyPromptMap = {
+            'low': '기초(하) 난이도. 개념을 확인하는 위주의 쉽고 기본적인 문제.',
+            'medium': '보통(중) 난이도. 교과서의 핵심 내용을 다루는 일반적인 수준의 문제.',
+            'high': '심화(상) 난이도. 응용력과 사고력을 요하는 도전적인 문제.'
+        };
+
+        const difficultyInstruction = difficultyPromptMap[difficulty];
+
         const prompt = `
             성취기준: "${standardDescription}"
             위 성취기준에 근거하여 중학생 수준의 총 ${totalQuestions}개의 문제를 JSON 형식으로 생성하세요.
@@ -275,12 +311,11 @@ export const generateQuestions = async (subjectName: string, standardDescription
             ${requestPrompts}
             
             지침:
+            - **난이도 설정**: ${difficultyInstruction}
             - ${languageInstruction}
             - ${explanationInstruction}
             - ${passageInstruction}
-            - **필수**: 객관식('multiple-choice') 문제의 경우, 반드시 4~5개의 선택지를 'options' 배열에 포함해야 합니다. 선택지가 없으면 문제가 성립되지 않습니다.
             - **창의/탐구형 문제('creativity')의 경우**: 'answer' 필드에는 학생이 작성해야 할 모범 답안의 예시나, 채점 시 고려해야 할 핵심 평가 요소(키워드, 논리 구조 등)를 상세히 기술하세요.
-            - 문제의 난이도는 중학생이 풀 수 있는 수준으로 맞춰주세요.
             - 시각 자료가 문제 풀이에 결정적인 도움이 되는 경우에만 'imagePrompt'에 영어 프롬프트 작성 (없으면 빈 문자열).
             - ${MATH_RULE_PROMPT}
             - **JSON 문자열 내부 주의**: LaTeX를 사용할 때는 백슬래시를 이스케이프 해야 합니다. (예: "$\\frac{1}{2}$" -> "$\\\\frac{1}{2}$")
@@ -316,7 +351,6 @@ export const generateQuestions = async (subjectName: string, standardDescription
                             options: {
                                 type: Type.ARRAY,
                                 items: { type: Type.STRING },
-                                description: "Required for multiple-choice questions. Must include 4-5 options."
                             },
                             optionsTranslation: {
                                 type: Type.ARRAY,

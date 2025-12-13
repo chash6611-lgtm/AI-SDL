@@ -5,6 +5,8 @@ export type View = 'selector' | 'study' | 'dashboard';
 
 export type Theme = 'light' | 'dark' | 'system';
 
+export type Difficulty = 'low' | 'medium' | 'high';
+
 export interface HistoryState {
     view: View;
     standard: { subjectName: string, standard: AchievementStandard } | null;
