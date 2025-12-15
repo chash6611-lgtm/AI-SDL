@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { EducationCurriculum, Subject, Unit, GradeContent, AchievementStandard } from '../types.ts';
 import { Button } from './common/Button.tsx';
 import type { AppStatus } from '../App.tsx';
@@ -13,6 +13,14 @@ interface CurriculumSelectorProps {
     apiStatus: AppStatus;
     apiError: string | null;
     isCoolMode: boolean;
+}
+
+interface FlatStandard {
+    curriculumName: string;
+    subjectName: string;
+    grade: string;
+    unitName: string;
+    standard: AchievementStandard;
 }
 
 const UsageGuideModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -40,9 +48,9 @@ const UsageGuideModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <p className="mb-2 text-sm">학교 수업 전 예습용이나, 수업 후 복습용으로 활용할 수 있습니다.</p>
                     <ul className="list-disc pl-5 space-y-1 mb-4 text-sm">
                         <li><strong>성취기준 기반 학습:</strong> 막연하게 "수학 공부"를 하는 것이 아니라, 교육과정(2022 개정)에 명시된 구체적인 성취기준을 하나씩 선택하여 목표를 명확히 합니다.</li>
+                        <li><strong>핵심 단어 검색:</strong> 찾고 싶은 개념(예: "태양계", "민주주의")을 검색창에 입력하면 관련 성취기준을 바로 찾을 수 있습니다.</li>
                         <li><strong>AI 튜터의 설명:</strong> 교과서만으로 이해가 안 가는 부분은 AI가 생성해주는 <strong>구조화된 설명(개념 정의, 원리, 예시)</strong>을 읽습니다.</li>
                         <li><strong>시각적/청각적 학습:</strong> 텍스트만 보는 것이 지루하다면 <strong>'듣기' 기능(TTS)</strong>을 켜서 강의처럼 듣거나, AI가 생성한 개념 이미지를 보며 직관적으로 이해합니다.</li>
-                        <li><strong>핵심 요약:</strong> 시간이 없을 때는 상단의 '핵심 요약' 박스만 빠르게 훑어보며 개념을 상기시킵니다.</li>
                     </ul>
 
                     <h3 className="text-base font-bold text-blue-600 dark:text-blue-400 mb-2">2. 1:1 맞춤형 질문 (심화 학습)</h3>
@@ -103,12 +111,61 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
     const [selectedStandardId, setSelectedStandardId] = useState<string>('');
     const [isGuideOpen, setIsGuideOpen] = useState(false);
     
+    // Search State
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+    
     // Local state for API key input to allow typing before submitting
     const [localApiKey, setLocalApiKey] = useState(apiKey);
 
     useEffect(() => {
         setLocalApiKey(apiKey);
     }, [apiKey]);
+
+    // Flatten all standards for search
+    const allStandards = useMemo(() => {
+        const list: FlatStandard[] = [];
+        educationCurriculums.forEach(curr => {
+            curr.subjects.forEach(sub => {
+                sub.grades.forEach(grade => {
+                    grade.units.forEach(unit => {
+                        unit.standards.forEach(std => {
+                            list.push({
+                                curriculumName: curr.name,
+                                subjectName: sub.name,
+                                grade: grade.grade,
+                                unitName: unit.name,
+                                standard: std
+                            });
+                        });
+                    });
+                });
+            });
+        });
+        return list;
+    }, [educationCurriculums]);
+
+    const filteredStandards = useMemo(() => {
+        if (!searchQuery.trim()) return [];
+        const lowerQuery = searchQuery.toLowerCase().replace(/\s+/g, '');
+        return allStandards.filter(item => {
+            const text = (item.standard.description + item.unitName).toLowerCase().replace(/\s+/g, '');
+            return text.includes(lowerQuery);
+        }).slice(0, 20); // Limit results
+    }, [allStandards, searchQuery]);
+
+    const handleSearchSelect = (item: FlatStandard) => {
+        // Set all dropdown values to match the selected item
+        setSelectedCurriculumName(item.curriculumName);
+        setSelectedSubjectName(item.subjectName);
+        setSelectedGrade(item.grade);
+        setSelectedUnitName(item.unitName);
+        setSelectedStandardId(item.standard.id);
+        
+        // Clear search
+        setSearchQuery('');
+        setIsSearchFocused(false);
+    };
 
     const {
         availableSubjects,
@@ -149,27 +206,32 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
         };
     }, [educationCurriculums, selectedCurriculumName, selectedSubjectName, selectedGrade, selectedUnitName, selectedStandardId]);
     
-    useEffect(() => {
-        setSelectedGrade('');
+    // Dropdown Reset Logic moved to onChange handlers to allow programmatic batch updates (Reverse Selection)
+    const handleCurriculumChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedCurriculumName(e.target.value);
         setSelectedSubjectName('');
-        setSelectedUnitName('');
-        setSelectedStandardId('');
-    }, [selectedCurriculumName]);
-    
-    useEffect(() => {
-       setSelectedUnitName('');
-       setSelectedStandardId('');
-    }, [selectedGrade]);
-
-    useEffect(() => {
         setSelectedGrade('');
         setSelectedUnitName('');
         setSelectedStandardId('');
-    }, [selectedSubjectName]);
+    };
 
-    useEffect(() => {
+    const handleSubjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedSubjectName(e.target.value);
+        setSelectedGrade('');
+        setSelectedUnitName('');
         setSelectedStandardId('');
-    }, [selectedUnitName]);
+    };
+
+    const handleGradeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedGrade(e.target.value);
+        setSelectedUnitName('');
+        setSelectedStandardId('');
+    };
+
+    const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedUnitName(e.target.value);
+        setSelectedStandardId('');
+    };
 
     const handleSubmit = () => {
         if (selectedSubject && selectedStandard) {
@@ -198,6 +260,19 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
         return !(availableUnits.length === 1 && availableUnits[0].name === "준비중인 단원입니다.");
     }, [availableUnits]);
 
+    // Helper for highlighting text
+    const HighlightedText = ({ text, highlight }: { text: string, highlight: string }) => {
+        if (!highlight.trim()) return <>{text}</>;
+        const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
+        return (
+            <>
+                {parts.map((part, i) => 
+                    part.toLowerCase() === highlight.toLowerCase() ? <span key={i} className="text-neon-blue font-bold">{part}</span> : part
+                )}
+            </>
+        );
+    };
+
 
     return (
          <div className="max-w-3xl mx-auto text-center px-2 pb-24 md:pb-20">
@@ -222,24 +297,72 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
                         앱 활용 방법
                     </button>
                 </div>
+
+                {/* Search Bar - Moved inside the card */}
+                <div className="relative mb-4 z-20">
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg aria-hidden="true" className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                        <input 
+                            type="text" 
+                            className="block w-full pl-10 p-2.5 text-sm text-gray-900 border border-gray-300 rounded-lg bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:placeholder-gray-400 dark:text-white focus:ring-neon-blue focus:border-neon-blue transition-all" 
+                            placeholder="핵심 단어로 성취기준 검색 (예: 소인수분해, 태양계, 민주주의)" 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onFocus={() => setIsSearchFocused(true)}
+                            onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)} // Delay to allow click
+                        />
+                    </div>
+                    {isSearchFocused && searchQuery.trim() && (
+                        <div className="absolute w-full bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 mt-1 max-h-64 overflow-y-auto text-left z-30">
+                            {filteredStandards.length > 0 ? (
+                                <ul>
+                                    {filteredStandards.map((item, index) => (
+                                        <li key={index}>
+                                            <button 
+                                                className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-0"
+                                                onClick={() => handleSearchSelect(item)}
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+                                                        {item.subjectName} &gt; <HighlightedText text={item.unitName} highlight={searchQuery} />
+                                                    </span>
+                                                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-snug">
+                                                        <HighlightedText text={item.standard.description} highlight={searchQuery} />
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                                    검색 결과가 없습니다.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
                 <div className="space-y-2.5">
                     <div>
                         <label htmlFor="curriculum" className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">교육과정</label>
-                        <Select id="curriculum" value={selectedCurriculumName} onChange={e => setSelectedCurriculumName(e.target.value)}>
+                        <Select id="curriculum" value={selectedCurriculumName} onChange={handleCurriculumChange}>
                             {educationCurriculums.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                         </Select>
                     </div>
                     <div className="flex gap-2">
                         <div className="flex-1">
                             <label htmlFor="subject" className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">과목</label>
-                            <Select id="subject" value={selectedSubjectName} onChange={e => setSelectedSubjectName(e.target.value)} disabled={availableSubjects.length === 0}>
+                            <Select id="subject" value={selectedSubjectName} onChange={handleSubjectChange} disabled={availableSubjects.length === 0}>
                                 <option value="" disabled={selectedSubjectName !== ''}>선택</option>
                                 {availableSubjects.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
                             </Select>
                         </div>
                         <div className="flex-1">
                             <label htmlFor="grade" className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">학년</label>
-                            <Select id="grade" value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)} disabled={!selectedSubjectName}>
+                            <Select id="grade" value={selectedGrade} onChange={handleGradeChange} disabled={!selectedSubjectName}>
                                 <option value="" disabled={selectedGrade !== ''}>선택</option>
                                 {availableGrades.map(g => <option key={g} value={g}>{g}</option>)}
                             </Select>
@@ -250,7 +373,7 @@ export const CurriculumSelector: React.FC<CurriculumSelectorProps> = ({
                         {selectedGrade && !isSubjectReady ? (
                           <DisabledSelectPlaceholder text="준비중인 단원입니다." />
                         ) : (
-                          <Select id="unit" value={selectedUnitName} onChange={e => setSelectedUnitName(e.target.value)} disabled={!selectedGrade}>
+                          <Select id="unit" value={selectedUnitName} onChange={handleUnitChange} disabled={!selectedGrade}>
                               <option value="" disabled={selectedUnitName !== ''}>단원을 선택하세요</option>
                               {availableUnits.map(u => <option key={u.name} value={u.name}>{u.name}</option>)}
                           </Select>
